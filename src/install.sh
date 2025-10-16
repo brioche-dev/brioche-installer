@@ -216,4 +216,4 @@ install_brioche() {
     esac
 }
 
-install_brioche
+"install_brioche"
