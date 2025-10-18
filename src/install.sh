@@ -44,10 +44,28 @@ install_brioche() {
 
     brioche_filename="brioche-$brioche_platform.tar.xz"
 
+    # Helpers for downloading via curl
+    __brioche_install_download() {
+        if [ "$#" -ne 1 ] || [ -z "$1" ]; then
+            echo "Internal error: __brioche_install_download called incorrectly" >&2
+            exit 1
+        fi
+
+        curl --proto '=https' --tlsv1.2 -fL "$1"
+    }
+    __brioche_install_download_to() {
+        if [ "$#" -ne 2 ] || [ -z "$1" ] || [ -z "$2" ]; then
+            echo "Internal error: __brioche_install_download_to called incorrectly" >&2
+            exit 1
+        fi
+
+        curl --proto '=https' --tlsv1.2 -fL "$1" -o "$2"
+    }
+
     # Resolve current version and URL from channel
     case "$channel" in
         stable)
-            brioche_version="$(curl --proto '=https' --tlsv1.2 -fL "https://releases.brioche.dev/channels/$channel/latest-version.txt")"
+            brioche_version="$(__brioche_install_download "https://releases.brioche.dev/channels/$channel/latest-version.txt")"
             echo "Latest version for $channel: $brioche_version"
 
             brioche_url="https://releases.brioche.dev/$brioche_version/$brioche_filename"
@@ -87,12 +105,12 @@ install_brioche() {
 
     # Download the signature
     echo "Downloading signature to \`$temp_download.sig\`..."
-    curl --proto '=https' --tlsv1.2 -fL "$brioche_url.sig" -o "$temp_download.sig"
+    __brioche_install_download_to "$brioche_url.sig" "$temp_download.sig"
     echo
 
     # Download the file to a temporary path
     echo "Downloading to \`$temp_download\`..."
-    curl --proto '=https' --tlsv1.2 -fL "$brioche_url" -o "$temp_download"
+    __brioche_install_download_to "$brioche_url" "$temp_download"
     echo
 
     # Write an "authorized signers" file with the public key to a temporary
