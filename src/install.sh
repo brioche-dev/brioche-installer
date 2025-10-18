@@ -58,15 +58,18 @@ install_brioche() {
             brioche_url="https://development-content.brioche.dev/github.com/brioche-dev/brioche/branches/main/$brioche_filename"
             brioche_release_signing_namespace=nightly@brioche.dev
             ;;
-        v*)
-            # Install a specific version number directly
-            brioche_version="$channel"
+        *)
+            # Try to parse as a version number (e.g. "v0.1.6" or "0.1.6")
+            matched_version_number="$(expr "//$channel" : '//v\{0,1\}\([[:digit:]]\{1,\}\.[[:digit:]]\{1,\}\.[[:digit:]]\{1,\}.*\)$' || true)"
+            if [ -z "$matched_version_number" ]; then
+                # Passed version was neither a supported channel name nor a semver-like version number
+                echo "Unsupported version number or channel name: $channel" >&2
+                exit 1
+            fi
+
+            brioche_version="v$matched_version_number"
             brioche_url="https://releases.brioche.dev/$brioche_version/$brioche_filename"
             brioche_release_signing_namespace=release@brioche.dev
-            ;;
-        *)
-            echo "Unsupported channel: $channel" >&2
-            exit 1
             ;;
     esac
 
