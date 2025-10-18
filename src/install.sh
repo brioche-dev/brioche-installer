@@ -17,13 +17,14 @@ install_brioche() {
         exit 1
     fi
 
-    # The directory where Brioche gets installed (using a symlink)
-    install_dir="${BRIOCHE_INSTALL_DIR:-$HOME/.local/bin}"
+    # The root directory where the installer will put stuff
+    brioche_install_root="${BRIOCHE_INSTALL_ROOT:-${XDG_DATA_DIR:-$HOME/.local/share}/brioche-install}"
 
-    # The directory where to unpack the installation
-    unpack_dir="${BRIOCHE_INSTALL_UNPACK_DIR:-$HOME/.local/share/brioche-install/brioche}"
+    # The bin dir where the main Brioche binary will be put (as a symlink)
+    bin_dir="${BRIOCHE_INSTALL_BIN_DIR:-$HOME/.local/bin}"
 
-    channel="${BRIOCHE_CHANNEL:-stable}"
+    # The channel or version number to install
+    channel="${BRIOCHE_INSTALL_VERSION:-stable}"
 
     # Get the platform name based on the kernel and architecture
     case "$(uname -sm)" in
@@ -56,6 +57,12 @@ install_brioche() {
             brioche_version="$channel"
             brioche_url="https://development-content.brioche.dev/github.com/brioche-dev/brioche/branches/main/$brioche_filename"
             brioche_release_signing_namespace=nightly@brioche.dev
+            ;;
+        v*)
+            # Install a specific version number directly
+            brioche_version="$channel"
+            brioche_url="https://releases.brioche.dev/$brioche_version/$brioche_filename"
+            brioche_release_signing_namespace=release@brioche.dev
             ;;
         *)
             echo "Unsupported channel: $channel" >&2
@@ -107,35 +114,36 @@ install_brioche() {
 
 
     # Unpack tarfile
-    echo "Unpacking to \`$unpack_dir/$brioche_version\`..."
-    rm -rf "${unpack_dir:?}/${brioche_version:?}"
-    mkdir -p "$unpack_dir/$brioche_version"
-    tar -xJf "$brioche_temp/$brioche_filename" --strip-components=1 -C "$unpack_dir/$brioche_version"
+    unpack_dir="$brioche_install_root/brioche/$brioche_version"
+    echo "Unpacking to \`$unpack_dir\`..."
+    rm -rf "$unpack_dir"
+    mkdir -p "$unpack_dir"
+    tar -xJf "$brioche_temp/$brioche_filename" --strip-components=1 -C "$unpack_dir"
 
     # Add a symlink to the current version
-    echo "Adding symlink \`$unpack_dir/current\` -> \`$brioche_version\`..."
-    ln -sf "$brioche_version" "$unpack_dir/current"
+    echo "Adding symlink \`$brioche_install_root/brioche/current\` -> \`$brioche_version\`..."
+    ln -sf "$brioche_version" "$brioche_install_root/brioche/current"
 
     # Add a relative symlink in the install directory to the binary
     # within the current version
-    symlink_target="$unpack_dir/current/bin/brioche"
-    echo "Adding symlink \`$install_dir/brioche\` -> \`$symlink_target\`..."
-    mkdir -p "$install_dir"
-    ln -sfr "$symlink_target" "$install_dir/brioche"
+    symlink_target="$brioche_install_root/brioche/current/bin/brioche"
+    echo "Adding symlink \`$bin_dir/brioche\` -> \`$symlink_target\`..."
+    mkdir -p "$bin_dir"
+    ln -sfr "$symlink_target" "$bin_dir/brioche"
 
     # Run post-install step. This will also print a message like:
     # "Brioche <version> is now installed"
     BRIOCHE_SELF_POST_INSTALL_SOURCE=brioche-install \
-        "$install_dir/brioche" self-post-install
+        "$bin_dir/brioche" self-post-install
 
     # Check if the install directory is in the $PATH
     case ":$PATH:" in
-        *:$install_dir:*)
+        *:$bin_dir:*)
             # Already in $PATH
             ;;
         *)
             echo
-            echo "\`$install_dir\` isn't in your shell \$PATH! Add it to your shell profile to finish setting up Brioche"
+            echo "\`$bin_dir\` isn't in your shell \$PATH! Add it to your shell profile to finish setting up Brioche"
     esac
 }
 
