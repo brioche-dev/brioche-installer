@@ -5,6 +5,8 @@
 install_brioche() {
     set -eu
 
+    brioche_release_public_key="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIN62i+zbHQzRA0qSCULi9Skk8DxfYANdd73WfdyF6D48"
+
     # Validate $HOME is set to a valid directory
     if [ -z "$HOME" ]; then
         echo '$HOME environment variable is not set!'
@@ -48,10 +50,12 @@ install_brioche() {
             echo "Latest version for $channel: $brioche_version"
 
             brioche_url="https://releases.brioche.dev/$brioche_version/$brioche_filename"
+            brioche_release_signing_namespace=release@brioche.dev
             ;;
         nightly)
             brioche_version="$channel"
             brioche_url="https://development-content.brioche.dev/github.com/brioche-dev/brioche/branches/main/$brioche_filename"
+            brioche_release_signing_namespace=nightly@brioche.dev
             ;;
         *)
             echo "Unsupported channel: $channel" >&2
@@ -63,15 +67,44 @@ install_brioche() {
     brioche_temp="$(mktemp -d -t brioche-XXXXXX)"
     trap 'rm -rf -- "$brioche_temp"' EXIT
 
+    temp_download="$brioche_temp/$brioche_filename"
     echo "Downloading Brioche..."
-    echo "  URL: $brioche_url"
+    echo "  Download URL: $brioche_url"
+    echo "  Signature URL: $brioche_url.sig"
+    echo "  Signing key: $brioche_release_public_key"
+    echo "  Signing namespace: $brioche_release_signing_namespace"
+    echo
+
+    # Download the signature
+    echo "Downloading signature to \`$temp_download.sig\`..."
+    curl --proto '=https' --tlsv1.2 -fL "$brioche_url.sig" -o "$temp_download.sig"
     echo
 
     # Download the file to a temporary path
-    temp_download="$brioche_temp/$brioche_filename"
     echo "Downloading to \`$temp_download\`..."
     curl --proto '=https' --tlsv1.2 -fL "$brioche_url" -o "$temp_download"
     echo
+
+    # Write an "authorized signers" file with the public key to a temporary
+    # file. Unfortunately, POSIX sh doesn't support process substitution, so
+    # we create a temporary read-only file with the public key for validation
+    brioche_release_signers_file="$brioche_temp/authorized-signers"
+    (umask 377 && echo "release@brioche.dev $brioche_release_public_key" > "$brioche_release_signers_file")
+
+    # Validate the file signature
+    echo "Validating signature..."
+    if ssh-keygen -Y verify \
+        -s "$temp_download.sig" \
+        -n "$brioche_release_signing_namespace" \
+        -f "$brioche_release_signers_file" \
+        -I "release@brioche.dev" \
+        < "$temp_download"; then
+        echo "Signature matches"
+    else
+        echo "Signature does not match!"
+        exit 1
+    fi
+
 
     # Unpack tarfile
     echo "Unpacking to \`$unpack_dir/$brioche_version\`..."
