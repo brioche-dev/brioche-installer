@@ -51,6 +51,7 @@ install_brioche() {
             exit 1
         fi
 
+        echo "# Downloading: $1" >&2
         curl --proto '=https' --tlsv1.2 -fL "$1"
     }
     __brioche_install_download_to() {
@@ -59,6 +60,7 @@ install_brioche() {
             exit 1
         fi
 
+        echo "# Downloading: $1" >&2
         curl --proto '=https' --tlsv1.2 -fL "$1" -o "$2"
     }
 
@@ -66,7 +68,8 @@ install_brioche() {
     case "$channel" in
         stable)
             brioche_version="$(__brioche_install_download "https://releases.brioche.dev/channels/$channel/latest-version.txt")"
-            echo "Latest version for $channel: $brioche_version"
+            echo "# Latest version for $channel: $brioche_version"
+            echo
 
             brioche_url="https://releases.brioche.dev/$brioche_version/$brioche_filename"
             brioche_release_signing_namespace=release@brioche.dev
@@ -95,23 +98,15 @@ install_brioche() {
     brioche_temp="$(mktemp -d -t brioche-XXXXXX)"
     trap 'rm -rf -- "$brioche_temp"' EXIT
 
-    temp_download="$brioche_temp/$brioche_filename"
-    echo "Downloading Brioche..."
-    echo "  Download URL: $brioche_url"
-    echo "  Signature URL: $brioche_url.sig"
-    echo "  Signing key: $brioche_release_public_key"
-    echo "  Signing namespace: $brioche_release_signing_namespace"
+    echo "> Downloading Brioche $brioche_version..."
     echo
+    temp_download="$brioche_temp/$brioche_filename"
 
     # Download the signature
-    echo "Downloading signature to \`$temp_download.sig\`..."
     __brioche_install_download_to "$brioche_url.sig" "$temp_download.sig"
-    echo
 
     # Download the file to a temporary path
-    echo "Downloading to \`$temp_download\`..."
     __brioche_install_download_to "$brioche_url" "$temp_download"
-    echo
 
     # Write an "authorized signers" file with the public key to a temporary
     # file. Unfortunately, POSIX sh doesn't support process substitution, so
@@ -120,35 +115,40 @@ install_brioche() {
     (umask 377 && echo "release@brioche.dev $brioche_release_public_key" > "$brioche_release_signers_file")
 
     # Validate the file signature
-    echo "Validating signature..."
-    if ssh-keygen -Y verify \
+    echo
+    echo "> Validating signature..."
+    echo "> - Public key: $brioche_release_public_key"
+    echo "> - Signing namespace: $brioche_release_signing_namespace"
+    echo
+    if ! ssh-keygen -Y verify \
         -s "$temp_download.sig" \
         -n "$brioche_release_signing_namespace" \
         -f "$brioche_release_signers_file" \
         -I "release@brioche.dev" \
         < "$temp_download"; then
-        echo "Signature matches"
-    else
-        echo "Signature does not match!"
+        echo
+        echo "> Signature is invalid!"
         exit 1
     fi
 
+    unpack_dir="$brioche_install_root/brioche/$brioche_version"
+    echo
+    echo "> Installing Brioche $brioche_version..."
+    echo "> - Install root: $brioche_install_root"
+    echo "> - Bin dir: $bin_dir"
+    echo
 
     # Unpack tarfile
-    unpack_dir="$brioche_install_root/brioche/$brioche_version"
-    echo "Unpacking to \`$unpack_dir\`..."
     rm -rf "$unpack_dir"
     mkdir -p "$unpack_dir"
     tar -xJf "$brioche_temp/$brioche_filename" --strip-components=1 -C "$unpack_dir"
 
     # Add a symlink to the current version
-    echo "Adding symlink \`$brioche_install_root/brioche/current\` -> \`$brioche_version\`..."
     ln -sf "$brioche_version" "$brioche_install_root/brioche/current"
 
     # Add a relative symlink in the install directory to the binary
     # within the current version
     symlink_target="$brioche_install_root/brioche/current/bin/brioche"
-    echo "Adding symlink \`$bin_dir/brioche\` -> \`$symlink_target\`..."
     mkdir -p "$bin_dir"
     ln -sfr "$symlink_target" "$bin_dir/brioche"
 
