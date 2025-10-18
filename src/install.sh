@@ -90,7 +90,10 @@ install_brioche() {
     mkdir -p "$install_dir"
     ln -sfr "$symlink_target" "$install_dir/brioche"
 
-    echo "Installation complete!"
+    # Run post-install step. This will also print a message like:
+    # "Brioche <version> is now installed"
+    BRIOCHE_SELF_POST_INSTALL_SOURCE=brioche-install \
+        "$install_dir/brioche" self-post-install
 
     # Check if the install directory is in the $PATH
     case ":$PATH:" in
