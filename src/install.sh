@@ -19,7 +19,7 @@ install_brioche() {
     install_dir="${BRIOCHE_INSTALL_DIR:-$HOME/.local/bin}"
 
     # The directory where to unpack the installation
-    unpack_dir="${BRIOCHE_INSTALL_UNPACK_DIR:-$HOME/.local/libexec/brioche}"
+    unpack_dir="${BRIOCHE_INSTALL_UNPACK_DIR:-$HOME/.local/share/brioche-install/brioche}"
 
     channel="${BRIOCHE_CHANNEL:-stable}"
 
