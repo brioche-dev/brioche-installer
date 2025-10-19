@@ -2,7 +2,7 @@
 
 # Wrap the installation in a function so it only runs once the
 # entire script is downloaded
-install_brioche() {
+_brioche_install() {
     set -eu
 
     brioche_release_public_key="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIN62i+zbHQzRA0qSCULi9Skk8DxfYANdd73WfdyF6D48"
@@ -45,18 +45,18 @@ install_brioche() {
     brioche_filename="brioche-$brioche_platform.tar.xz"
 
     # Helpers for downloading via curl
-    __brioche_install_download() {
+    _download() {
         if [ "$#" -ne 1 ] || [ -z "$1" ]; then
-            echo "Internal error: __brioche_install_download called incorrectly" >&2
+            echo "Internal error: _download called incorrectly" >&2
             exit 1
         fi
 
         echo "# Downloading: $1" >&2
         curl --proto '=https' --tlsv1.2 -fL "$1"
     }
-    __brioche_install_download_to() {
+    _download_to() {
         if [ "$#" -ne 2 ] || [ -z "$1" ] || [ -z "$2" ]; then
-            echo "Internal error: __brioche_install_download_to called incorrectly" >&2
+            echo "Internal error: _download_to called incorrectly" >&2
             exit 1
         fi
 
@@ -67,7 +67,7 @@ install_brioche() {
     # Resolve current version and URL from channel
     case "$channel" in
         stable)
-            brioche_version="$(__brioche_install_download "https://releases.brioche.dev/channels/$channel/latest-version.txt")"
+            brioche_version="$(_download "https://releases.brioche.dev/channels/$channel/latest-version.txt")"
             echo "# Latest version for $channel: $brioche_version"
             echo
 
@@ -103,10 +103,10 @@ install_brioche() {
     temp_download="$brioche_temp/$brioche_filename"
 
     # Download the signature
-    __brioche_install_download_to "$brioche_url.sig" "$temp_download.sig"
+    _download_to "$brioche_url.sig" "$temp_download.sig"
 
     # Download the file to a temporary path
-    __brioche_install_download_to "$brioche_url" "$temp_download"
+    _download_to "$brioche_url" "$temp_download"
 
     # Write an "authorized signers" file with the public key to a temporary
     # file. Unfortunately, POSIX sh doesn't support process substitution, so
@@ -168,4 +168,4 @@ install_brioche() {
     esac
 }
 
-"install_brioche"
+"_brioche_install"
