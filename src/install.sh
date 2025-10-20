@@ -95,6 +95,36 @@ _brioche_install() {
             ;;
     esac
 
+    case "${BRIOCHE_INSTALL_APPARMOR_CONFIG:-false}" in
+        true|1)
+            install_apparmor_config=true
+            ;;
+        false|0)
+            install_apparmor_config=false
+            ;;
+        auto)
+            # Detect if we should install an AppArmor profile. AppArmor 4.0
+            # introduced new features to restrict unprivileged user
+            # namespaces, which Ubuntu 23.10 enforces by default. The
+            # Brioche AppArmor policy is meant to lift this restriction
+            # for sandboxed builds, which we only need to do on AppArmor 4+.
+            # So, we only install the policy if AppArmor is enabled and
+            # we find the config file for AppArmor abi 4.0.
+            if type aa-enabled >/dev/null && aa-enabled -q && [ -e /etc/apparmor.d/abi/4.0 ]; then
+                install_apparmor_config=true
+            else
+                install_apparmor_config=false
+            fi
+            ;;
+        *)
+            _echo_error "Invalid setting for \$BRIOCHE_INSTALL_APPARMOR_CONFIG"
+            exit 1
+            ;;
+    esac
+    if [ "$install_apparmor_config" = true ]; then
+        required_commands="$required_commands realpath tee sudo apparmor_parser"
+    fi
+
     missing_commands=""
     for command in $required_commands; do
         if ! type "$command" >/dev/null; then
@@ -258,6 +288,42 @@ _brioche_install() {
             echo "$new_path" >> "$GITHUB_PATH"
             echo "Added to \$PATH: $new_path"
         done
+
+        _endgroup
+    fi
+
+    if [ "$install_apparmor_config" = true ]; then
+        _startgroup "Installing AppArmor config..."
+
+        # Get the real, final path of the Brioche binary to use for the
+        # AppArmor config.
+        brioche_bin_realpath="$(realpath "$unpack_dir/bin/brioche")"
+
+        # Validate that the Brioche path doesn't have any characters we might
+        # need to escape / quote in the AppArmor config
+        # TODO: We should update this to support more paths!
+        brioche_bin_realpath_is_safe="$(expr "//$brioche_bin_realpath" : '//[a-zA-Z0-9_/.-]*$')"
+        if [ "$brioche_bin_realpath_is_safe" -eq 0 ]; then
+            echo "Brioche bin realpath: $brioche_bin_realpath"
+            _echo_error "The path for the Brioche binary that we'd use in the AppArmor config has special characters we don't know how to handle for now!"
+            exit 1
+        fi
+
+        # Write the AppArmor config
+        sudo tee /etc/apparmor.d/brioche-sandbox <<EOF
+abi <abi/4.0>,
+include <tunables/global>
+
+# Enable unprivileged user namespaces for Brioche. See this Ubuntu blog post
+# for more context:
+# https://ubuntu.com/blog/ubuntu-23-10-restricted-unprivileged-user-namespaces
+$brioche_bin_realpath flags=(default_allow) {
+  userns,
+}
+EOF
+
+        # Validate the AppArmor config
+        sudo apparmor_parser -r /etc/apparmor.d/brioche-sandbox
 
         _endgroup
     fi
