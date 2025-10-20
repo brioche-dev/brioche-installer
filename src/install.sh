@@ -67,6 +67,26 @@ _brioche_install() {
     # The channel or version number to install
     channel="${BRIOCHE_INSTALL_VERSION:-stable}"
 
+    case "${BRIOCHE_INSTALL_VERIFY_SIGNATURE:-true}" in
+        true|1)
+            verify_signature=true
+            ;;
+        false|0)
+            verify_signature=false
+            ;;
+        auto)
+            if type ssh-keygen >/dev/null; then
+                verify_signature=true
+            else
+                verify_signature=false
+            fi
+            ;;
+        *)
+            _echo_error "Invalid setting for \$BRIOCHE_INSTALL_VERIFY_SIGNATURE"
+            exit 1
+            ;;
+    esac
+
     # Get the platform name based on the kernel and architecture
     case "$(uname -sm)" in
         "Linux x86_64")
@@ -145,38 +165,42 @@ _brioche_install() {
     temp_download="$brioche_temp/$brioche_filename"
 
     # Download the signature
-    _download_to "$brioche_url.sig" "$temp_download.sig"
+    if [ "$verify_signature" = true ]; then
+        _download_to "$brioche_url.sig" "$temp_download.sig"
+    fi
 
     # Download the file to a temporary path
     _download_to "$brioche_url" "$temp_download"
 
     _endgroup
 
-    _startgroup "Validating signature..."
+    if [ "$verify_signature" = true ]; then
+        _startgroup "Verifying signature..."
 
-    echo "- Public key: $brioche_release_public_key"
-    echo "- Signing namespace: $brioche_release_signing_namespace"
-    echo
-
-    # Write an "authorized signers" file with the public key to a temporary
-    # file. Unfortunately, POSIX sh doesn't support process substitution, so
-    # we create a temporary read-only file with the public key for validation
-    brioche_release_signers_file="$brioche_temp/authorized-signers"
-    (umask 377 && echo "release@brioche.dev $brioche_release_public_key" > "$brioche_release_signers_file")
-
-    # Validate the file signature
-    if ! ssh-keygen -Y verify \
-        -s "$temp_download.sig" \
-        -n "$brioche_release_signing_namespace" \
-        -f "$brioche_release_signers_file" \
-        -I "release@brioche.dev" \
-        < "$temp_download"; then
+        echo "- Public key: $brioche_release_public_key"
+        echo "- Signing namespace: $brioche_release_signing_namespace"
         echo
-        echo "> Signature is invalid!"
-        exit 1
-    fi
 
-    _endgroup
+        # Write an "authorized signers" file with the public key to a temporary
+        # file. Unfortunately, POSIX sh doesn't support process substitution, so
+        # we create a temporary read-only file with the public key for validation
+        brioche_release_signers_file="$brioche_temp/authorized-signers"
+        (umask 377 && echo "release@brioche.dev $brioche_release_public_key" > "$brioche_release_signers_file")
+
+        # Verify the file signature
+        if ! ssh-keygen -Y verify \
+            -s "$temp_download.sig" \
+            -n "$brioche_release_signing_namespace" \
+            -f "$brioche_release_signers_file" \
+            -I "release@brioche.dev" \
+            < "$temp_download"; then
+            echo
+            _echo_error "Failed to verify signature!"
+            exit 1
+        fi
+
+        _endgroup
+    fi
 
     _startgroup "Installing Brioche $brioche_version..."
     echo "- Install root: $brioche_install_root"
