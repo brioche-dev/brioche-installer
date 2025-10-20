@@ -67,9 +67,17 @@ _brioche_install() {
     # The channel or version number to install
     channel="${BRIOCHE_INSTALL_VERSION:-stable}"
 
+    # List of commands that need to be present to run the installer
+    required_commands="curl tar xz uname mkdir ln rm expr"
+    hint_packages_ubuntu_debian="coreutils tar xz-utils curl"
+    hint_packages_fedora="coreutils tar xz curl"
+
     case "${BRIOCHE_INSTALL_VERIFY_SIGNATURE:-true}" in
         true|1)
             verify_signature=true
+            required_commands="$required_commands ssh-keygen"
+            hint_packages_ubuntu_debian="$hint_packages_ubuntu_debian openssh-client"
+            hint_packages_fedora="$hint_packages_fedora openssh-clients"
             ;;
         false|0)
             verify_signature=false
@@ -86,6 +94,21 @@ _brioche_install() {
             exit 1
             ;;
     esac
+
+    missing_commands=""
+    for command in $required_commands; do
+        if ! type "$command" >/dev/null; then
+            missing_commands="${missing_commands:+$missing_commands, }$command"
+        fi
+    done
+    if [ -n "$missing_commands" ]; then
+        _echo_error "Missing required command(s): $missing_commands"
+        echo
+        echo "Could not find a required command! You may need to install some system packages:"
+        echo "- Ubuntu / Debian: \`sudo apt-get install $hint_packages_ubuntu_debian\`"
+        echo "- Fedora: \`sudo dnf install $hint_packages_fedora\`"
+        exit 1
+    fi
 
     # Get the platform name based on the kernel and architecture
     case "$(uname -sm)" in
