@@ -31,6 +31,11 @@ _brioche_install() {
                 echo "::endgroup::"
             }
 
+            if [ -z "${GITHUB_PATH:-}" ]; then
+                _echo_error "Installer is running in GitHub Actions mode, but \$GITHUB_PATH is not set"
+                exit 1
+            fi
+
             ;;
         *)
             echo "Unsupported value for \$BRIOCHE_INSTALL_CONTEXT: $install_ctx"
@@ -55,6 +60,9 @@ _brioche_install() {
 
     # The bin dir where the main Brioche binary will be put (as a symlink)
     bin_dir="${BRIOCHE_INSTALL_BIN_DIR:-$HOME/.local/bin}"
+
+    # Get Brioche's data directory
+    brioche_data_dir="${BRIOCHE_DATA_DIR:-${XDG_DATA_DIR:-$HOME/.local/share}/brioche}"
 
     # The channel or version number to install
     channel="${BRIOCHE_INSTALL_VERSION:-stable}"
@@ -194,20 +202,35 @@ _brioche_install() {
 
     _endgroup
 
+    if [ "$install_ctx" = github-actions ]; then
+        _startgroup "Updating \$PATH..."
+
+        # Add the bin dir and the dir for packages installed by Brioche
+        # to $PATH
+        for new_path in "$bin_dir" "$brioche_data_dir/installed/bin"; do
+            echo "$new_path" >> "$GITHUB_PATH"
+            echo "Added to \$PATH: $new_path"
+        done
+
+        _endgroup
+    fi
+
     # Run post-install step. This will also print a message like:
     # "Brioche <version> is now installed"
     BRIOCHE_SELF_POST_INSTALL_SOURCE=brioche-install \
         "$bin_dir/brioche" self-post-install
 
-    # Check if the install directory is in the $PATH
-    case ":$PATH:" in
-        *:$bin_dir:*)
-            # Already in $PATH
-            ;;
-        *)
-            echo
-            echo "\`$bin_dir\` isn't in your shell \$PATH! Add it to your shell profile to finish setting up Brioche"
-    esac
+    if [ "$install_ctx" = standard ]; then
+        # Check if the install directory is in the $PATH
+        case ":$PATH:" in
+            *:$bin_dir:*)
+                # Already in $PATH
+                ;;
+            *)
+                echo
+                echo "\`$bin_dir\` isn't in your shell \$PATH! Add it to your shell profile to finish setting up Brioche"
+        esac
+    fi
 }
 
 "_brioche_install"
