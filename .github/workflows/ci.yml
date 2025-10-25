@@ -8,6 +8,11 @@ on:
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
 
+permissions:
+  id-token: write
+  contents: read
+  attestations: write
+
 jobs:
   publish:
     name: Publish
@@ -28,11 +33,19 @@ jobs:
           cat src/install.sh.sig
         env:
           BRIOCHE_INSTALLER_CODESIGN_PRIVATE_KEY: ${{ secrets.BRIOCHE_INSTALLER_CODESIGN_PRIVATE_KEY }}
+      - name: Attest installer
+        id: attest
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: |
+            src/install.sh
+            src/install.sh.sig
       - name: Upload to S3
         run: |
           mkdir -p "upload/$GITHUB_SHA/" "upload/channels/stable/"
-          cp src/install.sh src/install.sh.sig "upload/$GITHUB_SHA/"
-          cp -r "upload/$GITHUB_SHA"/* "upload/channels/stable/"
+          cp "src/install.sh" "src/install.sh.sig" "upload/$GITHUB_SHA/"
+          cp "$attestation_bundle" "upload/$GITHUB_SHA/attestation.json"
+          cp "upload/$GITHUB_SHA"/* "upload/channels/stable/"
           echo "$GITHUB_SHA" > "upload/channels/stable/latest-version.txt"
 
           ls -lhR upload/
@@ -51,6 +64,7 @@ jobs:
             "upload/channels/stable/" \
             "s3://brioche-installer/channels/stable/"
         env:
+          attestation_bundle: ${{ steps.attest.outputs.bundle-path }}
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: ${{ vars.AWS_DEFAULT_REGION }}
