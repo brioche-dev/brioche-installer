@@ -178,6 +178,29 @@ _brioche_install() {
         curl --proto '=https' --tlsv1.2 -fL "$1" -o "$2"
     }
 
+    # Helper to create or update a symlink. We try to update the symlink
+    # atomically, if possible!
+    _link() {
+        if [ "$#" -ne 2 ] || [ -z "$1" ] || [ -z "$2" ]; then
+            echo "Internal error: _link called incorrectly" >&2
+            exit 1
+        fi
+
+        echo "# Symlink: $2 -> $1"
+
+        # First, crate the symlink at a new randomized path
+        temp_symlink_path=$(mktemp -up "$(dirname "$2")" ".$(basename "$2")-XXXXXXXXX")
+        ln -snf "$1" "$temp_symlink_path"
+
+        # ...then try to move the symlink into place atomically
+        if ! mv -T "$temp_symlink_path" "$2" 2>/dev/null; then
+            # If `mv` fails, remove the target path (and temp symlink), then
+            # try to create the symlink normally
+            rm -rf "$temp_symlink_path" "$2"
+            ln -sn "$1" "$2"
+        fi
+    }
+
     # Resolve current version and URL from channel
     case "$channel" in
         stable)
@@ -267,15 +290,13 @@ _brioche_install() {
     tar -xJf "$brioche_temp/$brioche_filename" --strip-components=1 -C "$unpack_dir"
 
     # Add a symlink to the current version
-    ln -sf "$brioche_version" "$brioche_install_root/brioche/current"
+    _link "$brioche_version" "$brioche_install_root/brioche/current"
 
-    # Add a relative symlink in the install directory to the binary
-    # within the current version
-    symlink_target="$brioche_install_root/brioche/current/bin/brioche"
+    # Add a symlink in the install directory to the binary within
+    # the current version.
     mkdir -p "$bin_dir"
-    ln -sfr "$symlink_target" "$bin_dir/brioche"
-
-    echo "# Symlink: $bin_dir/brioche -> $symlink_target"
+    rm -rf "$bin_dir/brioche"
+    _link "$brioche_install_root/brioche/current/bin/brioche" "$bin_dir/brioche"
 
     _endgroup
 
