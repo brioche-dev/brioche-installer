@@ -68,7 +68,7 @@ _brioche_install() {
     channel="${BRIOCHE_INSTALL_VERSION:-stable}"
 
     # List of commands that need to be present to run the installer
-    required_commands="curl tar xz uname mkdir ln rm expr"
+    required_commands="curl tar xz uname mkdir ln rm expr mktemp"
     hint_packages_ubuntu_debian="coreutils tar xz-utils curl"
     hint_packages_fedora="coreutils tar xz curl"
 
