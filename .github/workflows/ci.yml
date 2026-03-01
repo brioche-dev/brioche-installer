@@ -35,7 +35,7 @@ jobs:
           BRIOCHE_INSTALLER_CODESIGN_PRIVATE_KEY: ${{ secrets.BRIOCHE_INSTALLER_CODESIGN_PRIVATE_KEY }}
       - name: Attest installer
         id: attest
-        uses: actions/attest-build-provenance@v3
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: |
             src/install.sh
