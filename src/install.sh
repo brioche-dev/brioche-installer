@@ -166,7 +166,7 @@ _brioche_install() {
         fi
 
         echo "# Downloading: $1" >&2
-        curl --proto '=https' --tlsv1.2 -fL "$1"
+        curl --retry 5 --retry-delay 15 --retry-all-errors --proto '=https' --tlsv1.2 -fL "$1"
     }
     _download_to() {
         if [ "$#" -ne 2 ] || [ -z "$1" ] || [ -z "$2" ]; then
@@ -175,7 +175,7 @@ _brioche_install() {
         fi
 
         echo "# Downloading: $1" >&2
-        curl --proto '=https' --tlsv1.2 -fL "$1" -o "$2"
+        curl --retry 5 --retry-delay 15 --retry-all-errors --proto '=https' --tlsv1.2 -fL "$1" -o "$2"
     }
 
     # Helper to create or update a symlink. We try to update the symlink
